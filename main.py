@@ -33,20 +33,25 @@ async def roll(update: Update, context: ContextTypes.DEFAULT_TYPE):
 bot_app.add_handler(CommandHandler("start", start))
 bot_app.add_handler(CommandHandler("roll", roll))
 
-@app.route('/')
-def index():
-    return {"message": "DiceBot is running!"}
-
 @app.route('/webhook', methods=['POST'])
 def webhook():
     if request.headers.get('content-type') == 'application/json':
+        from telegram import Update
+        import asyncio
+
         data = request.get_json(force=True)
         update = Update.de_json(data, bot_app.bot)
-        import asyncio
-        asyncio.get_event_loop().run_until_complete(bot_app.process_update(update))
+
+        async def handle():
+            await bot_app.initialize()
+            await bot_app.process_update(update)
+
+        asyncio.run(handle())  # 🔥 Правильно. Никаких get_event_loop
+
         return 'ok'
     else:
         abort(403)
+
 
 if __name__ == "__main__":
     app.run(port=5000)
