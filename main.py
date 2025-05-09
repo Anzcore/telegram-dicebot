@@ -43,6 +43,10 @@ def webhook():
         data = request.get_json(force=True)
         update = Update.de_json(data, bot_app.bot)
         import asyncio
+        async def process():
+            await bot_app.initialize()  # 👈 обязательно!
+            await bot_app.process_update(update)
+            
         asyncio.get_event_loop().run_until_complete(bot_app.process_update(update))
         return 'ok'
     else:
