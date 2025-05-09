@@ -4,39 +4,47 @@ from flask import Flask, request, abort
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
-# Telegram Bot Token
+# Настройка логирования
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+
+# Получаем токен из переменной окружения
 TOKEN = os.environ["TELEGRAM_TOKEN"]
 
-# Flask app
+# Flask-приложение
 app = Flask(__name__)
 
-# Telegram app
+# Telegram Application
 bot_app = Application.builder().token(TOKEN).build()
 
 # Команда /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Привет! Используй /roll, чтобы бросить d20 🎲")
+    await update.message.reply_text("Привет! Используй команду /roll, чтобы бросить d20 🎲")
 
 # Команда /roll
 async def roll(update: Update, context: ContextTypes.DEFAULT_TYPE):
     import random
-    value = random.randint(1, 20)
-    if value == 20:
-        msg = "🎲 Ты бросил 20! Критический успех! 🎉"
-    elif value == 1:
-        msg = "🎲 Ты бросил 1... Критическая неудача! 💀"
+    result = random.randint(1, 20)
+    if result == 20:
+        text = "🎲 Ты бросил 20! Критический успех! 🎉"
+    elif result == 1:
+        text = "🎲 Ты бросил 1... Критическая неудача! 💀"
     else:
-        msg = f"🎲 Ты бросил {value}"
-    await update.message.reply_text(msg)
+        text = f"🎲 Ты бросил {result}"
+    await update.message.reply_text(text)
 
-# Регистрируем команды
+# Регистрируем обработчики
 bot_app.add_handler(CommandHandler("start", start))
 bot_app.add_handler(CommandHandler("roll", roll))
 
+# Главная страница для проверки
 @app.route('/')
 def index():
     return {"message": "DiceBot is running!"}
 
+# Обработка Telegram webhook
 @app.route('/webhook', methods=['POST'])
 def webhook():
     if request.headers.get('content-type') == 'application/json':
@@ -44,15 +52,15 @@ def webhook():
         update = Update.de_json(data, bot_app.bot)
 
         import asyncio
+        async def handle():
+            await bot_app.initialize()
+            await bot_app.process_update(update)
 
-        async def process():
-            await bot_app.initialize()                # 🟢 обязательно!
-            await bot_app.process_update(update)     # 🟢 и только потом обработка
-
-        asyncio.run(process())  # 👈 это правильно вместо get_event_loop()
+        asyncio.run(handle())  # запускаем async-функцию корректно
         return 'ok'
     else:
         abort(403)
 
+# Локальный запуск (если нужен)
 if __name__ == "__main__":
     app.run(port=5000)
