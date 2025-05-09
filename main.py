@@ -48,15 +48,17 @@ def index():
 @app.route('/webhook', methods=['POST'])
 def webhook():
     if request.headers.get('content-type') == 'application/json':
+        from telegram import Update
+        import asyncio
+
         data = request.get_json(force=True)
         update = Update.de_json(data, bot_app.bot)
 
-        import asyncio
         async def handle():
             await bot_app.initialize()
             await bot_app.process_update(update)
 
-        asyncio.run(handle())  # запускаем async-функцию корректно
+        asyncio.run(handle())  # ← это единственная async строка
         return 'ok'
     else:
         abort(403)
