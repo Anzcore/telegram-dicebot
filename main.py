@@ -1,66 +1,75 @@
 import os
+import random
 import logging
+import asyncio
 from flask import Flask, request, abort
-from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes
-
-# Настройка логирования
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
+from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
+from telegram.ext import (
+    Application, CommandHandler, ContextTypes,
+    MessageHandler, filters
 )
 
-# Получаем токен из переменной окружения
+# Логирование
+logging.basicConfig(level=logging.INFO)
+
+# Токен из переменной окружения
 TOKEN = os.environ["TELEGRAM_TOKEN"]
 
 # Flask-приложение
 app = Flask(__name__)
 
-# Telegram Application
+# Telegram-приложение
 bot_app = Application.builder().token(TOKEN).build()
 
-# Команда /start
+# --- Команды и сообщения ---
+
+# /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Привет! Используй команду /roll, чтобы бросить d20 🎲")
+    keyboard = [[KeyboardButton("🎲 Бросить d20")]]
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    await update.message.reply_text(
+        "Привет! Нажми кнопку ниже, чтобы бросить кубик:",
+        reply_markup=reply_markup
+    )
 
-# Команда /roll
-async def roll(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    import random
-    result = random.randint(1, 20)
-    if result == 20:
-        text = "🎲 Ты бросил 20! Критический успех! 🎉"
-    elif result == 1:
-        text = "🎲 Ты бросил 1... Критическая неудача! 💀"
-    else:
-        text = f"🎲 Ты бросил {result}"
-    await update.message.reply_text(text)
+# Бросок по кнопке
+async def handle_roll_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.message.text == "🎲 Бросить d20":
+        result = random.randint(1, 20)
+        if result == 20:
+            msg = "🎲 Ты бросил 20! Критический успех! 🎉"
+        elif result == 1:
+            msg = "🎲 Ты бросил 1... Критическая неудача! 💀"
+        else:
+            msg = f"🎲 Ты бросил {result}"
+        await update.message.reply_text(msg)
 
-# Регистрируем обработчики
+# --- Обработчики ---
+
 bot_app.add_handler(CommandHandler("start", start))
-bot_app.add_handler(CommandHandler("roll", roll))
+bot_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_roll_button))
 
-# Главная страница для проверки
-@app.route('/')
+# --- Flask Webhook ---
+
+@app.route("/")
 def index():
     return {"message": "DiceBot is running!"}
 
-# Обработка Telegram webhook
-@app.route('/webhook', methods=['POST'])
+@app.route("/webhook", methods=["POST"])
 def webhook():
-    if request.headers.get('content-type') == 'application/json':
+    if request.headers.get("content-type") == "application/json":
         data = request.get_json(force=True)
         update = Update.de_json(data, bot_app.bot)
 
-        import asyncio
-        async def handle():
+        async def process():
             await bot_app.initialize()
             await bot_app.process_update(update)
 
-        asyncio.run(handle())  # запускаем async-функцию корректно
-        return 'ok'
+        asyncio.run(process())
+        return "ok"
     else:
         abort(403)
 
-# Локальный запуск (если нужен)
+# --- Локальный запуск (если нужно) ---
 if __name__ == "__main__":
     app.run(port=5000)
